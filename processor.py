@@ -96,6 +96,8 @@ def _download_video(url: str, work_dir: Path) -> Path:
         ("tv+web_safari", ["tv", "web_safari"]),
     ]
     options: dict = {
+        # yt-dlp now needs a JS runtime to solve YouTube's player challenges.
+        "js_runtimes": {"deno": {}},
         "format": "bestvideo*+bestaudio/best",
         "outtmpl": str(work_dir / "source.%(ext)s"),
         "merge_output_format": "mp4",
