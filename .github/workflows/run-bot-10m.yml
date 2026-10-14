@@ -20,15 +20,15 @@ jobs:
 
       - name: Check required secrets and create temporary environment
         env:
-          TELEGRAM_BOT_TOKEN: \${{ secrets.TELEGRAM_BOT_TOKEN }}
-          ALLOWED_USER_IDS: \${{ secrets.ALLOWED_USER_IDS }}
-          TELEGRAM_API_ID: \${{ secrets.TELEGRAM_API_ID }}
-          TELEGRAM_API_HASH: \${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         shell: bash
         run: |
           set -euo pipefail
           for key in TELEGRAM_BOT_TOKEN ALLOWED_USER_IDS TELEGRAM_API_ID TELEGRAM_API_HASH; do
-            if [[ -z "\${!key}" ]]; then
+            if [[ -z "${!key}" ]]; then
               echo "::error::GitHub Actions secret missing: $key"
               exit 1
             fi
