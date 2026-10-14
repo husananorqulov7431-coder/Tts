@@ -1,0 +1,107 @@
+name: Deploy to Oracle Cloud
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-tts-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment secrets
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          ORACLE_SSH_PORT: ${{ secrets.ORACLE_SSH_PORT }}
+          ORACLE_KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        run: |
+          set -eu
+          for key in ORACLE_HOST ORACLE_USER ORACLE_SSH_KEY ORACLE_SSH_PORT ORACLE_KNOWN_HOSTS TELEGRAM_BOT_TOKEN ALLOWED_USER_IDS TELEGRAM_API_ID TELEGRAM_API_HASH; do
+            eval "value=\${$key}"
+            if [ -z "$value" ]; then
+              echo "::error::GitHub Actions secret missing: $key"
+              exit 1
+            fi
+          done
+
+      - name: Configure SSH
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          ORACLE_SSH_PORT: ${{ secrets.ORACLE_SSH_PORT }}
+          ORACLE_KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_SSH_KEY" > "$HOME/.ssh/oracle_tts_key"
+          chmod 600 "$HOME/.ssh/oracle_tts_key"
+          printf '%s\n' "$ORACLE_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Copy application to Oracle
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+          ORACLE_SSH_PORT: ${{ secrets.ORACLE_SSH_PORT }}
+        run: |
+          set -eu
+          ssh -i "$HOME/.ssh/oracle_tts_key" -p "$ORACLE_SSH_PORT" "$ORACLE_USER@$ORACLE_HOST" 'mkdir -p /opt/tts-bot'
+          rsync -az --delete \
+            --exclude '.git/' \
+            --exclude '.env' \
+            --exclude 'work/' \
+            --exclude '__pycache__/' \
+            -e "ssh -i $HOME/.ssh/oracle_tts_key -p $ORACLE_SSH_PORT" \
+            ./ "$ORACLE_USER@$ORACLE_HOST:/opt/tts-bot/"
+
+      - name: Install runtime secrets and restart services
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+          ORACLE_SSH_PORT: ${{ secrets.ORACLE_SSH_PORT }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        run: |
+          set -eu
+          umask 077
+          cat > .env <<EOF
+          TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+          ALLOWED_USER_IDS=$ALLOWED_USER_IDS
+          TELEGRAM_API_ID=$TELEGRAM_API_ID
+          TELEGRAM_API_HASH=$TELEGRAM_API_HASH
+          DEFAULT_VOICE=uz-UZ-SardorNeural
+          TTS_RATE=+0%
+          TTS_VOLUME=+0%
+          ORIGINAL_AUDIO_VOLUME=0.10
+          TRANSLATE_TO_UZBEK=true
+          MAX_VIDEO_DURATION_MINUTES=360
+          MAX_OUTPUT_MB=1900
+          MAX_SRT_MB=15
+          LOG_LEVEL=INFO
+          TELEGRAM_API_BASE_URL=http://telegram-bot-api:8081/bot
+          TELEGRAM_API_FILE_URL=http://telegram-bot-api:8081/file/bot
+          WORK_DIR=/work/jobs
+          INBOX_DIR=/work/inbox
+          EOF
+          scp -i "$HOME/.ssh/oracle_tts_key" -P "$ORACLE_SSH_PORT" .env "$ORACLE_USER@$ORACLE_HOST:/opt/tts-bot/.env"
+          rm -f .env
+          ssh -i "$HOME/.ssh/oracle_tts_key" -p "$ORACLE_SSH_PORT" "$ORACLE_USER@$ORACLE_HOST" \
+            'cd /opt/tts-bot && chmod 600 .env && docker compose up -d --build --remove-orphans && docker compose ps'
