@@ -42,6 +42,8 @@ API_FILE_URL = os.getenv("TELEGRAM_API_FILE_URL", "http://telegram-bot-api:8081/
 DEFAULT_VOICE = os.getenv("DEFAULT_VOICE", "uz-UZ-SardorNeural")
 MAX_SRT_MB = int(os.getenv("MAX_SRT_MB", "15"))
 MAX_JOB_SECONDS = int(os.getenv("MAX_JOB_SECONDS", "600"))
+BOT_RUNTIME_SECONDS = int(os.getenv("BOT_RUNTIME_SECONDS", "0"))
+STOP_AFTER_JOB = os.getenv("STOP_AFTER_JOB", "false").lower() in {"1", "true", "yes", "on"}
 INBOX_ROOT = Path(os.getenv("INBOX_DIR", "/work/inbox"))
 INBOX_ROOT.mkdir(parents=True, exist_ok=True)
 JOB_SEMAPHORE = asyncio.Semaphore(1)
@@ -411,15 +413,21 @@ async def _run_job(
                 video=InputFile(stream, filename="uzbek_dub.mp4"),
                 caption=caption,
                 supports_streaming=True,
+                reply_to_message_id=status_message.message_id if status_message else None,
                 read_timeout=900,
                 write_timeout=900,
                 connect_timeout=60,
                 pool_timeout=60,
             )
-        try:
-            await application.bot.delete_message(chat_id=chat_id, message_id=status_message.message_id)
-        except TelegramError:
-            pass
+        if status_message:
+            try:
+                await application.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=status_message.message_id,
+                    text="✅ Vazifa tugadi. Yakuniy video ushbu xabarga reply sifatida yuborildi.",
+                )
+            except TelegramError:
+                pass
     except ProcessingError as exc:
         log.warning("Job failed for user %s: %s", user_id, exc)
         try:
@@ -453,6 +461,21 @@ async def _run_job(
         if rendered_dir:
             shutil.rmtree(rendered_dir, ignore_errors=True)
         shutil.rmtree(staged_dir, ignore_errors=True)
+        if STOP_AFTER_JOB and application.running:
+            log.info("One-shot job finished; stopping bot process.")
+            application.stop_running()
+
+
+async def _stop_after_runtime(application: Application) -> None:
+    await asyncio.sleep(BOT_RUNTIME_SECONDS)
+    if application.running:
+        log.info("Configured bot runtime limit reached; stopping bot process.")
+        application.stop_running()
+
+
+async def _post_init(application: Application) -> None:
+    if BOT_RUNTIME_SECONDS > 0:
+        application.create_task(_stop_after_runtime(application), name="runtime-shutdown-timer")
 
 
 def _wait_for_local_api() -> None:
@@ -477,6 +500,7 @@ def main() -> None:
     _wait_for_local_api()
     application = (
         ApplicationBuilder()
+        .post_init(_post_init)
         .token(TOKEN)
         .base_url(API_BASE_URL)
         .base_file_url(API_FILE_URL)
