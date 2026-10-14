@@ -1,0 +1,36 @@
+services:
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      TELEGRAM_LOCAL: "1"
+    volumes:
+      - telegram-api-data:/var/lib/telegram-bot-api
+      - work-data:/work
+    # 8081 porti internetga e'lon qilinmaydi.
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      TELEGRAM_API_BASE_URL: http://telegram-bot-api:8081/bot
+      TELEGRAM_API_FILE_URL: http://telegram-bot-api:8081/file/bot
+      WORK_DIR: /work/jobs
+      INBOX_DIR: /work/inbox
+    volumes:
+      - work-data:/work
+      - telegram-api-data:/var/lib/telegram-bot-api
+    depends_on:
+      - telegram-bot-api
+    stop_grace_period: 60s
+
+volumes:
+  work-data:
+  telegram-api-data:
