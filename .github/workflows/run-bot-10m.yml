@@ -47,7 +47,6 @@ jobs:
           MAX_VIDEO_DURATION_MINUTES=360
           MAX_OUTPUT_MB=1900
           MAX_SRT_MB=15
-          MAX_JOB_SECONDS=600
           BOT_RUNTIME_SECONDS=600
           STOP_AFTER_JOB=true
           LOG_LEVEL=INFO
