@@ -162,7 +162,8 @@ def _download_video(url: str, work_dir: Path) -> Path:
             or "confirm you’re not a bot" in joined_errors.lower()):
         raise ProcessingError(
             "YouTube anonim yuklashni bot-tekshiruv sababli rad etdi. Kod avtomatik ravishda "
-            "default, tv, android_vr va web_safari player profillarini sinab ko‘rdi, ammo "
+            "default, tv, android_vr, web_safari, tv_simply va web_embedded player "
+            "profillarini sinab ko‘rdi, ammo "
             "bu server/IP uchun ularning hech biri ishlamadi. Bu video kodi emas, YouTube "
             "tomonidagi cheklov bo‘lishi mumkin; birozdan keyin qayta urinib ko‘ring."
         ) from last_error
