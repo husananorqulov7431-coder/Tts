@@ -45,12 +45,14 @@ class ProcessorHelpersTest(unittest.TestCase):
             def prepare_filename(self, _info):
                 return Path(self.options["outtmpl"].replace("%(ext)s", "mp4"))
 
+        result_exists = False
         with tempfile.TemporaryDirectory() as directory:
             with patch.dict(os.environ, {"YOUTUBE_COOKIES_FILE": ""}):
                 with patch("processor.yt_dlp.YoutubeDL", FakeYoutubeDL):
                     result = _download_video("https://youtu.be/example", Path(directory))
+                    result_exists = result.exists()
 
-        self.assertTrue(result.exists())
+        self.assertTrue(result_exists)
         self.assertEqual(len(calls), 2)
         self.assertNotIn("cookiefile", calls[0])
         self.assertEqual(
