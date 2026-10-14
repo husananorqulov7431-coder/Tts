@@ -73,6 +73,7 @@ def has_audio(media_path: Path) -> bool:
 
 
 def _download_video(url: str, work_dir: Path) -> Path:
+    """Download a YouTube video, retrying with cookie-free player clients if challenged."""
     max_seconds = MAX_VIDEO_MINUTES * 60 if MAX_VIDEO_MINUTES > 0 else 0
 
     def duration_filter(info: dict, *, incomplete: bool = False) -> str | None:
@@ -83,7 +84,16 @@ def _download_video(url: str, work_dir: Path) -> Path:
             return "Jonli efirlarni qayta ishlash qo‘llanmaydi."
         return None
 
-    options = {
+    # First keep yt-dlp's default behavior, then try clients that can work
+    # without browser cookies/PO tokens. YouTube can change these rules.
+    client_profiles: list[tuple[str, list[str] | None]] = [
+        ("default", None),
+        ("tv", ["tv"]),
+        ("android_vr", ["android_vr"]),
+        ("web_safari", ["web_safari"]),
+        ("tv+web_safari", ["tv", "web_safari"]),
+    ]
+    options: dict = {
         "format": "bestvideo*+bestaudio/best",
         "outtmpl": str(work_dir / "source.%(ext)s"),
         "merge_output_format": "mp4",
@@ -95,39 +105,69 @@ def _download_video(url: str, work_dir: Path) -> Path:
         "concurrent_fragment_downloads": 4,
         "overwrites": True,
         "match_filter": duration_filter,
-        # Optional authenticated YouTube cookies; never commit this file.
-        **({"cookiefile": os.getenv("YOUTUBE_COOKIES_FILE")} if os.getenv("YOUTUBE_COOKIES_FILE") and Path(os.getenv("YOUTUBE_COOKIES_FILE", "")).is_file() and Path(os.getenv("YOUTUBE_COOKIES_FILE", "")).stat().st_size > 0 else {}),
     }
-    try:
-        with yt_dlp.YoutubeDL(options) as downloader:
-            info = downloader.extract_info(url, download=True)
-            prepared = Path(downloader.prepare_filename(info))
-            candidates = [
-                p for p in work_dir.glob("source.*")
-                if p.is_file() and p.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}
-                and not p.name.endswith((".part", ".ytdl"))
-            ]
-            if prepared.exists() and prepared.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}:
-                return prepared
-            if candidates:
-                return max(candidates, key=lambda p: p.stat().st_size)
-    except Exception as exc:
-        message = str(exc)
-        if "limitidan uzun" in message or "Jonli efir" in message:
-            raise ProcessingError(message) from exc
-        log.exception("yt-dlp download failed")
-        if "Sign in to confirm you’re not a bot" in message or "Sign in to confirm you're not a bot" in message:
-            raise ProcessingError(
-                "YouTube bot tekshiruvini talab qildi. GitHub Actions Secrets ichiga "
-                "o‘zingizning YouTube hisobingizdan eksport qilingan cookies.txt faylini "
-                "YOUTUBE_COOKIES nomi bilan qo‘shib, qayta urinib ko‘ring. Cookie eskirgan "
-                "bo‘lsa yoki YouTube server IP manzilini bloklasa, bu usul ham ishlamasligi mumkin."
-            ) from exc
+    # Optional only: ordinary public videos are attempted without requiring cookies.
+    cookie_path = os.getenv("YOUTUBE_COOKIES_FILE")
+    if cookie_path and Path(cookie_path).is_file() and Path(cookie_path).stat().st_size > 0:
+        options["cookiefile"] = cookie_path
+
+    errors: list[str] = []
+    last_error: Exception | None = None
+    for profile_name, clients in client_profiles:
+        # A failed format attempt may leave partial files; do not let a later
+        # attempt accidentally return one of those incomplete files.
+        for old_file in work_dir.glob("source.*"):
+            if old_file.is_file():
+                try:
+                    old_file.unlink()
+                except OSError:
+                    pass
+
+        attempt_options = dict(options)
+        if clients is not None:
+            attempt_options["extractor_args"] = {
+                "youtube": {"player_client": clients}
+            }
+        log.info("Trying YouTube player profile: %s", profile_name)
+
+        try:
+            with yt_dlp.YoutubeDL(attempt_options) as downloader:
+                info = downloader.extract_info(url, download=True)
+                prepared = Path(downloader.prepare_filename(info))
+                candidates = [
+                    p for p in work_dir.glob("source.*")
+                    if p.is_file()
+                    and p.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}
+                    and not p.name.endswith((".part", ".ytdl"))
+                ]
+                if prepared.exists() and prepared.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}:
+                    return prepared
+                if candidates:
+                    return max(candidates, key=lambda p: p.stat().st_size)
+                errors.append(f"{profile_name}: downloader returned no complete video file")
+        except Exception as exc:
+            message = str(exc)
+            if "limitidan uzun" in message or "Jonli efir" in message:
+                raise ProcessingError(message) from exc
+            last_error = exc
+            errors.append(f"{profile_name}: {message[:350]}")
+            log.warning("YouTube profile %s failed: %s", profile_name, message[:350])
+
+    joined_errors = "\n".join(errors)
+    if ("Sign in to confirm" in joined_errors or "not a bot" in joined_errors.lower()
+            or "confirm you’re not a bot" in joined_errors.lower()):
         raise ProcessingError(
-            "YouTube videosini yuklab bo‘lmadi. Havola ochiqligini tekshiring; "
-            "video private, yosh cheklovli yoki YouTube tomonidan vaqtincha cheklangan bo‘lishi mumkin."
-        ) from exc
-    raise ProcessingError("Yuklangan video fayli topilmadi.")
+            "YouTube anonim yuklashni bot-tekshiruv sababli rad etdi. Kod avtomatik ravishda "
+            "default, tv, android_vr va web_safari player profillarini sinab ko‘rdi, ammo "
+            "bu server/IP uchun ularning hech biri ishlamadi. Bu video kodi emas, YouTube "
+            "tomonidagi cheklov bo‘lishi mumkin; birozdan keyin qayta urinib ko‘ring."
+        ) from last_error
+
+    log.error("All YouTube download profiles failed: %s", joined_errors[-1800:])
+    raise ProcessingError(
+        "YouTube videosini yuklab bo‘lmadi. Havola, video ochiqligi yoki YouTube "
+        "serverining vaqtinchalik cheklovini tekshiring."
+    ) from last_error
 
 
 def _clean_caption(text: str) -> str:
