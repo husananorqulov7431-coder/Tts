@@ -91,6 +91,8 @@ def _download_video(url: str, work_dir: Path) -> Path:
         ("tv", ["tv"]),
         ("android_vr", ["android_vr"]),
         ("web_safari", ["web_safari"]),
+        ("tv_simply", ["tv_simply"]),
+        ("web_embedded", ["web_embedded"]),
         ("tv+web_safari", ["tv", "web_safari"]),
     ]
     options: dict = {
