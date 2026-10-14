@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+work/
+jobs/
+*.mp4
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.part
