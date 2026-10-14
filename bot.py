@@ -6,7 +6,9 @@ import os
 import re
 import shutil
 import uuid
+import time
 from pathlib import Path
+from urllib.request import urlopen
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
@@ -376,12 +378,26 @@ async def _run_job(
         shutil.rmtree(staged_dir, ignore_errors=True)
 
 
+def _wait_for_local_api() -> None:
+    # The local Bot API container may need a few seconds to initialize.
+    endpoint = f"{API_BASE_URL.rstrip('/')}/{TOKEN}/getMe"
+    for _ in range(60):
+        try:
+            with urlopen(endpoint, timeout=3) as response:
+                if response.status == 200:
+                    return
+        except Exception:
+            time.sleep(1)
+    raise RuntimeError("Telegram Bot API serveri 60 soniyada ishga tushmadi. docker compose logs telegram-bot-api ni tekshiring.")
+
+
 def main() -> None:
     if not TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN .env/secret ichida kiritilmagan.")
     if not ALLOWED_USER_IDS:
         raise RuntimeError("ALLOWED_USER_IDS kiritilmagan. Xavfsizlik uchun ruxsatsiz foydalanish bloklandi.")
 
+    _wait_for_local_api()
     application = (
         ApplicationBuilder()
         .token(TOKEN)
