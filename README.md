@@ -30,6 +30,7 @@ Repo → Settings → Secrets and variables → Actions sahifasida quyidagi `Sec
 - `ORACLE_USER` — Ubuntu image uchun odatda `ubuntu`.
 - `ORACLE_SSH_KEY` — VM’ga kiradigan SSH **private key**; public key esa serverdagi `~/.ssh/authorized_keys` faylida bo‘lishi kerak.
 - `ORACLE_SSH_PORT` — odatda `22`.
+- `ORACLE_KNOWN_HOSTS` — serverning tasdiqlangan SSH host-key satrlari; avval fingerprintni Oracle konsolidagi server kaliti bilan solishtirib, keyin `ssh-keyscan -p 22 PUBLIC_IP` natijasini saqlang.
 
 Secrets sahifasi: https://github.com/husananorqulov7431-coder/Tts/settings/secrets/actions
 
@@ -61,7 +62,7 @@ Agar shu bot tokeni avval Telegram’ning odatiy cloud Bot API’sida polling uc
 
 1. Botga YouTube video havolasini yuboring.
 2. O‘sha suhbatda mos `.srt` faylini yuboring.
-3. Standart sozlamada SRT boshqa tilda bo‘lsa o‘zbekchaga tarjima qilinadi. Tarjima xizmatida xatolik bo‘lsa, tarjima qilinmagan matnni ishlatishga urinadi. SRT allaqachon o‘zbekcha bo‘lsa `/translate off` buyrug‘i bilan tarjimani o‘chiring.
+3. Standart sozlamada SRT boshqa tilda bo‘lsa o‘zbekchaga tarjima qilinadi. Tarjima xizmati ishlamasa, bot xabar beradi va asl matnni ovozlashtirishga urinadi; bunday natija to‘liq o‘zbekcha bo‘lmasligi mumkin. SRT allaqachon o‘zbekcha bo‘lsa `/translate off` buyrug‘i bilan tarjimani o‘chiring.
 4. Yakuniy video botga qaytadi. Standart ovoz — `uz-UZ-SardorNeural`; `/voice female` bilan Madina ovozini, `/voice male` bilan Sardor ovozini tanlang.
 5. `/cancel` joriy topshiriqni kutish holatidan olib tashlaydi; allaqachon boshlangan FFmpeg jarayonini majburan to‘xtatmaydi.
 
