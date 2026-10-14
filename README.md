@@ -42,6 +42,7 @@ Bu usul botni doimiy ishlatmaydi. Siz workflow’ni qo‘lda ishga tushirasiz; b
 
 1. Repo → **Settings → Secrets and variables → Actions** sahifasida yuqoridagi `TELEGRAM_BOT_TOKEN`, `ALLOWED_USER_IDS`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` secret’larini kiriting.
 2. **Actions** → **Run Telegram bot for up to 10 minutes** → **Run workflow** ni bosing.
+   Agar token avval oddiy Telegram Bot API polling uchun ishlatilgan bo‘lsa, lokal Bot API’ga birinchi marta o‘tishdan oldin pastdagi `logOut` ko‘rsatmasini bir marta bajaring.
 3. Workflow ishga tushgach, Telegram’da botga `/start` yuboring. Avval YouTube linkini, keyin shu videoning `.srt` faylini yuboring.
 4. Inline tugmalarda erkak/ayol ovozini va Google Translate sozlamasini tanlang. Tayyor video jarayon xabariga reply ko‘rinishida qaytadi.
 5. Vazifa tugashi bilan bot va vaqtinchalik Docker ma’lumotlari tozalanadi. Hech qanday vazifa kelmasa, bot 10 daqiqa bo‘lgach o‘zi yopiladi.
