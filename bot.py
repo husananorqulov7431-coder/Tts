@@ -351,8 +351,7 @@ async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await message.reply_text(
         "✅ 2/2 — SRT fayli qabul qilindi. "
         + ("Google Translate yoqilgan. " if context.user_data.get("translate", TRANSLATE_BY_DEFAULT) else "Tarjima o‘tkazib yuboriladi. ")
-        + ("Ovoz: Madina (ayol)." if context.user_data.get("voice", DEFAULT_VOICE) == "uz-UZ-MadinaNeural" else "Ovoz: Sardor (erkak)."),
-        reply_markup=_settings_keyboard(context, include_cancel=True),
+        + ("Ovoz: Madina (ayol)." if context.user_data.get("voice", DEFAULT_VOICE) == "uz-UZ-MadinaNeural" else "Ovoz: Sardor (erkak).")
     )
     await _maybe_queue(update, context)
 
