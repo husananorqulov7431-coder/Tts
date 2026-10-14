@@ -474,7 +474,7 @@ async def _stop_after_runtime(application: Application) -> None:
 
 async def _post_init(application: Application) -> None:
     if BOT_RUNTIME_SECONDS > 0:
-        application.create_task(_stop_after_runtime(application), name="runtime-shutdown-timer")
+        asyncio.create_task(_stop_after_runtime(application), name="runtime-shutdown-timer")
 
 
 def _wait_for_local_api() -> None:
@@ -524,7 +524,7 @@ def main() -> None:
     ))
     application.add_handler(MessageHandler(filters.Document.ALL, on_document))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-    log.info("Bot starting. Allowed Telegram IDs: %s", sorted(ALLOWED_USER_IDS))
+    log.info("Bot starting. Authorized user count: %d", len(ALLOWED_USER_IDS))
     application.run_polling(drop_pending_updates=False, allowed_updates=Update.ALL_TYPES)
 
 
