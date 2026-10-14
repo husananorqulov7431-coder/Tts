@@ -95,6 +95,8 @@ def _download_video(url: str, work_dir: Path) -> Path:
         "concurrent_fragment_downloads": 4,
         "overwrites": True,
         "match_filter": duration_filter,
+        # Optional authenticated YouTube cookies; never commit this file.
+        **({"cookiefile": os.getenv("YOUTUBE_COOKIES_FILE")} if os.getenv("YOUTUBE_COOKIES_FILE") and Path(os.getenv("YOUTUBE_COOKIES_FILE", "")).is_file() and Path(os.getenv("YOUTUBE_COOKIES_FILE", "")).stat().st_size > 0 else {}),
     }
     try:
         with yt_dlp.YoutubeDL(options) as downloader:
@@ -114,9 +116,16 @@ def _download_video(url: str, work_dir: Path) -> Path:
         if "limitidan uzun" in message or "Jonli efir" in message:
             raise ProcessingError(message) from exc
         log.exception("yt-dlp download failed")
+        if "Sign in to confirm you’re not a bot" in message or "Sign in to confirm you're not a bot" in message:
+            raise ProcessingError(
+                "YouTube bot tekshiruvini talab qildi. GitHub Actions Secrets ichiga "
+                "o‘zingizning YouTube hisobingizdan eksport qilingan cookies.txt faylini "
+                "YOUTUBE_COOKIES nomi bilan qo‘shib, qayta urinib ko‘ring. Cookie eskirgan "
+                "bo‘lsa yoki YouTube server IP manzilini bloklasa, bu usul ham ishlamasligi mumkin."
+            ) from exc
         raise ProcessingError(
             "YouTube videosini yuklab bo‘lmadi. Havola ochiqligini tekshiring; "
-            "yosh cheklovi, private video yoki YouTube o‘zgarishlari xatoga sabab bo‘lishi mumkin."
+            "video private, yosh cheklovli yoki YouTube tomonidan vaqtincha cheklangan bo‘lishi mumkin."
         ) from exc
     raise ProcessingError("Yuklangan video fayli topilmadi.")
 
