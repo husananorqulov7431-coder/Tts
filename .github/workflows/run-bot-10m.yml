@@ -1,0 +1,74 @@
+name: Run Telegram bot for up to 10 minutes
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tts-one-shot-bot
+  cancel-in-progress: true
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check required secrets and create temporary environment
+        env:
+          TELEGRAM_BOT_TOKEN: \${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ALLOWED_USER_IDS: \${{ secrets.ALLOWED_USER_IDS }}
+          TELEGRAM_API_ID: \${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: \${{ secrets.TELEGRAM_API_HASH }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in TELEGRAM_BOT_TOKEN ALLOWED_USER_IDS TELEGRAM_API_ID TELEGRAM_API_HASH; do
+            if [[ -z "\${!key}" ]]; then
+              echo "::error::GitHub Actions secret missing: $key"
+              exit 1
+            fi
+          done
+          umask 077
+          cat > .env <<EOF
+          TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+          ALLOWED_USER_IDS=$ALLOWED_USER_IDS
+          TELEGRAM_API_ID=$TELEGRAM_API_ID
+          TELEGRAM_API_HASH=$TELEGRAM_API_HASH
+          DEFAULT_VOICE=uz-UZ-SardorNeural
+          TTS_RATE=+0%
+          TTS_VOLUME=+0%
+          ORIGINAL_AUDIO_VOLUME=0.10
+          TRANSLATE_TO_UZBEK=true
+          MAX_VIDEO_DURATION_MINUTES=360
+          MAX_OUTPUT_MB=1900
+          MAX_SRT_MB=15
+          MAX_JOB_SECONDS=600
+          BOT_RUNTIME_SECONDS=600
+          STOP_AFTER_JOB=true
+          LOG_LEVEL=INFO
+          TELEGRAM_API_BASE_URL=http://telegram-bot-api:8081/bot
+          TELEGRAM_API_FILE_URL=http://telegram-bot-api:8081/file/bot
+          WORK_DIR=/work/jobs
+          INBOX_DIR=/work/inbox
+          EOF
+          chmod 600 .env
+
+      - name: Start local Telegram Bot API
+        run: docker compose up -d telegram-bot-api
+
+      - name: Build bot container
+        run: docker compose build bot
+
+      - name: Wait for messages and process one job
+        run: docker compose run --rm --no-deps bot
+
+      - name: Stop containers and remove temporary files
+        if: always()
+        run: |
+          docker compose down --volumes --remove-orphans || true
+          rm -f .env
