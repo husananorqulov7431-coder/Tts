@@ -1,6 +1,6 @@
 # TTS — YouTube videolarini o‘zbekcha ovozlashtirish Telegram bot
 
-Bot Telegram orqali YouTube havolasi va `.srt` subtitr faylini oladi, subtitr matnini (kerak bo‘lsa) o‘zbekchaga tarjima qiladi, Edge TTS orqali ovoz yaratadi va ovozni videoning vaqtlariga moslaydi. Yakuniy videoda asl audio 10% darajada qoladi, o‘zbekcha diktor ovozi ustiga qo‘shiladi.
+Bot Telegram orqali avval YouTube havolasini, undan keyin mos `.srt` subtitr faylini oladi. Inline tugmalarda erkak/ayol ovozi tanlanadi va Google Translate orqali o‘zbekcha tarjima yoqiladi yoki o‘tkazib yuboriladi. GPT/Gemini kabi generativ AI modeli ishlatilmaydi. Edge TTS ovozni subtitr vaqtlariga moslaydi. Yakuniy videoda asl audio 10% darajada qoladi, video oqimi qayta kodlanmaydi.
 
 ## Muhim arxitektura
 
@@ -35,6 +35,18 @@ Repo → Settings → Secrets and variables → Actions sahifasida quyidagi `Sec
 Secrets sahifasi: https://github.com/husananorqulov7431-coder/Tts/settings/secrets/actions
 
 `ORACLE_KNOWN_HOSTS` secret’iga oddiygina tekshirilmagan boshqa server kalitini ko‘chirib qo‘ymang: u deploy vaqtida SSH serverining kimligini tekshirish uchun ishlatiladi.
+
+## GitHub Actions orqali 10 daqiqalik sinov (Oracle VM’siz)
+
+Bu usul botni doimiy ishlatmaydi. Siz workflow’ni qo‘lda ishga tushirasiz; bot 10 daqiqagacha Telegram xabarlarini kutadi va bitta vazifa bajarilgach o‘zi to‘xtaydi. GitHub Actions vazifasining umumiy xavfsizlik limiti 12 daqiqa.
+
+1. Repo → **Settings → Secrets and variables → Actions** sahifasida yuqoridagi `TELEGRAM_BOT_TOKEN`, `ALLOWED_USER_IDS`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` secret’larini kiriting.
+2. **Actions** → **Run Telegram bot for up to 10 minutes** → **Run workflow** ni bosing.
+3. Workflow ishga tushgach, Telegram’da botga `/start` yuboring. Avval YouTube linkini, keyin shu videoning `.srt` faylini yuboring.
+4. Inline tugmalarda erkak/ayol ovozini va Google Translate sozlamasini tanlang. Tayyor video jarayon xabariga reply ko‘rinishida qaytadi.
+5. Vazifa tugashi bilan bot va vaqtinchalik Docker ma’lumotlari tozalanadi. Hech qanday vazifa kelmasa, bot 10 daqiqa bo‘lgach o‘zi yopiladi.
+
+**Muhim:** workflow 24/7 bot emas — uni har bir sinov oldidan qo‘lda ishga tushirish kerak. Katta video 10 daqiqalik oynaga sig‘masa, vaqt tugaganda jarayon bekor bo‘lishi mumkin. Doimiy bot uchun Oracle VM usuli kerak.
 
 ## Oracle VM’ni bir marta tayyorlash
 
