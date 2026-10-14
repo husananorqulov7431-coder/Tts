@@ -171,7 +171,8 @@ def _download_video(url: str, work_dir: Path) -> Path:
 
 
 def _clean_caption(text: str) -> str:
-    text = text.replace("\\N", " ").replace("\\n", " ").replace("\n", " ")
+    # SRT line breaks may be represented by either \\N or \\n (one/two slashes).
+    text = re.sub(r"\\{1,2}[Nn]", " ", text).replace("\n", " ")
     text = re.sub(r"<[^>]+>", "", text)
     text = re.sub(r"\{[^}]*\}", "", text)
     text = re.sub(r"\s+", " ", text).strip()
