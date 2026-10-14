@@ -27,7 +27,7 @@ ORIGINAL_AUDIO_VOLUME = min(1.0, max(0.0, float(os.getenv("ORIGINAL_AUDIO_VOLUME
 TRANSLATE_BY_DEFAULT = os.getenv("TRANSLATE_TO_UZBEK", "true").lower() in {"1", "true", "yes", "on"}
 MAX_VIDEO_MINUTES = int(os.getenv("MAX_VIDEO_DURATION_MINUTES", "360"))
 MAX_OUTPUT_MB = int(os.getenv("MAX_OUTPUT_MB", "1900"))
-WORK_ROOT = Path(os.getenv("WORK_DIR", "/work/jobs"))
+WORK_ROOT = Path(os.getenv("WORK_DIR", "work/jobs"))
 WORK_ROOT.mkdir(parents=True, exist_ok=True)
 
 
@@ -228,10 +228,13 @@ async def _build_voice_track(
         original_entries = copy.deepcopy(entries)
         try:
             entries = await asyncio.to_thread(_translate_entries, entries)
-        except ProcessingError:
-            # Do not silently produce partially translated narration.
+        except ProcessingError as exc:
+            # Continue with original captions rather than losing the whole task.
             entries = original_entries
-            raise
+            await progress(
+                "Tarjima xizmati ishlamadi; asl SRT matni ovozlashtiriladi. "
+                f"Sabab: {str(exc)[:120]}"
+            )
         translated_srt = work_dir / "captions_uz.srt"
         translated_srt.write_text(srt.compose(entries), encoding="utf-8")
 
