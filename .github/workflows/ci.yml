@@ -33,3 +33,21 @@ jobs:
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+      - name: One-time live YouTube download smoke test
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[youtube-smoke]')
+        continue-on-error: true
+        env:
+          TEST_VIDEO_URL: https://youtu.be/zUkKSOyGHQU
+        run: |
+          python - <<'PY'
+          import os
+          import tempfile
+          from pathlib import Path
+          from processor import _download_video
+
+          url = os.environ["TEST_VIDEO_URL"]
+          with tempfile.TemporaryDirectory(prefix="youtube-smoke-") as tmp:
+              path = _download_video(url, Path(tmp))
+              size_mb = path.stat().st_size / (1024 * 1024)
+              print(f"LIVE_YOUTUBE_DOWNLOAD_SUCCESS size_mb={size_mb:.2f} file={path.name}")
+          PY
