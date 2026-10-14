@@ -12,9 +12,9 @@ from urllib.request import urlopen
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
-from telegram import InputFile, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile, Update
 from telegram.error import BadRequest, TelegramError
-from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from processor import (
     MAX_VIDEO_MINUTES,
@@ -41,6 +41,7 @@ API_BASE_URL = os.getenv("TELEGRAM_API_BASE_URL", "http://telegram-bot-api:8081/
 API_FILE_URL = os.getenv("TELEGRAM_API_FILE_URL", "http://telegram-bot-api:8081/file/bot")
 DEFAULT_VOICE = os.getenv("DEFAULT_VOICE", "uz-UZ-SardorNeural")
 MAX_SRT_MB = int(os.getenv("MAX_SRT_MB", "15"))
+MAX_JOB_SECONDS = int(os.getenv("MAX_JOB_SECONDS", "600"))
 INBOX_ROOT = Path(os.getenv("INBOX_DIR", "/work/inbox"))
 INBOX_ROOT.mkdir(parents=True, exist_ok=True)
 JOB_SEMAPHORE = asyncio.Semaphore(1)
@@ -107,12 +108,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.setdefault("voice", DEFAULT_VOICE)
     context.user_data.setdefault("translate", TRANSLATE_BY_DEFAULT)
     await update.effective_message.reply_text(
-        "YouTube videoni o‘zbekcha ovozlashtirish uchun:\n\n"
-        "1) YouTube video havolasini yuboring.\n"
-        "2) Shu chatga mos .srt subtitr faylini yuboring (havola va faylni istalgan tartibda yuborish mumkin).\n\n"
-        "SRT boshqa tilda bo‘lsa, standart sozlamada o‘zbekchaga tarjima qilinadi. "
-        "Asl audio 10% balandlikda saqlanadi va video oqimi qayta kodlanmaydi.\n\n"
-        "Buyruqlar: /voice male, /voice female, /translate on, /translate off, /cancel, /help"
+        "YouTube videoni o‘zbekcha ovozlashtirish\n\n"
+        "1/2 — avval YouTube video havolasini yuboring.\n"
+        "2/2 — keyin aynan shu videoning .srt faylini yuboring.\n\n"
+        "Inline tugmalar orqali erkak/ayol ovozini tanlang. Inglizcha SRT Google Translate orqali o‘zbekchaga tarjima qilinadi. Tarjimani o‘tkazib yuborish ham mumkin. AI tarjima modeli ishlatilmaydi.\n\n"
+        "Asl audio 10% darajada qoladi, video oqimi qayta kodlanmaydi. Har bir vazifa uchun maksimal vaqt: 10 daqiqa.",
+        reply_markup=_settings_keyboard(context),
     )
 
 
@@ -120,14 +121,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not await _guard(update):
         return
     await update.effective_message.reply_text(
-        "Foydalanish:\n"
-        "• YouTube havolasini va unga mos .srt faylni yuboring.\n"
-        "• /voice male — Sardor ovozi.\n"
-        "• /voice female — Madina ovozi.\n"
-        "• /translate on — SRT’ni o‘zbekchaga tarjima qilish.\n"
-        "• /translate off — SRT allaqachon o‘zbekcha bo‘lsa tarjimani o‘chirish.\n"
-        "• /cancel — hali navbatga olinmagan topshiriqni bekor qilish.\n\n"
-        "Eslatma: bot faqat ruxsat etilgan Telegram ID’lar uchun ishlaydi."
+        "Tartib qat’iy: 1) YouTube havolasi, 2) .srt fayli.\n"
+        "Inline tugmalar erkak/ayol ovozi, Google Translate va tarjimani o‘tkazib yuborishni boshqaradi.\n"
+        "Asl audio 10% darajada qoladi; video oqimi qayta kodlanmaydi. Vazifa 10 daqiqada tugamasa, vaqt limiti bo‘yicha to‘xtatiladi.",
+        reply_markup=_settings_keyboard(context, include_cancel=bool(context.user_data.get("pending_job"))),
     )
 
 
@@ -142,9 +139,7 @@ async def voice_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         context.user_data["voice"] = "uz-UZ-SardorNeural"
         name = "Sardor (erkak)"
     else:
-        await update.effective_message.reply_text(
-            "Ovoz tanlang: /voice male yoki /voice female"
-        )
+        await update.effective_message.reply_text("Ovoz tanlang: /voice male yoki /voice female")
         return
     await update.effective_message.reply_text(f"Keyingi video uchun ovoz: {name}.")
 
@@ -155,13 +150,13 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     choice = (context.args[0].lower() if context.args else "").strip()
     if choice in {"on", "yes", "ha"}:
         context.user_data["translate"] = True
-        message = "Tarjima yoqildi: subtitrlar o‘zbekchaga tarjima qilinadi."
+        message = "Google Translate yoqildi: subtitr o‘zbekchaga tarjima qilinadi."
     elif choice in {"off", "no", "yo‘q", "yoq"}:
         context.user_data["translate"] = False
-        message = "Tarjima o‘chirildi: SRT matni o‘z holicha ovozlashtiriladi."
+        message = "Tarjima o‘chirildi: SRT asl holicha ovozlashtiriladi."
     else:
         current = "yoqilgan" if context.user_data.get("translate", TRANSLATE_BY_DEFAULT) else "o‘chirilgan"
-        message = f"Tarjima hozir {current}. O‘zgartirish: /translate on yoki /translate off."
+        message = f"Tarjima hozir {current}. /translate on yoki /translate off."
     await update.effective_message.reply_text(message)
 
 
@@ -174,9 +169,87 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.effective_message.reply_text("Kutayotgan topshiriq bekor qilindi.")
     else:
         await update.effective_message.reply_text(
-            "Kutilayotgan topshiriq yo‘q. Ishga tushgan renderni bu buyruq bekor qilmaydi."
+            "Kutilayotgan topshiriq yo‘q. Allaqachon render boshlangan bo‘lsa, /cancel uni to‘xtatmaydi."
         )
 
+
+def _settings_keyboard(context: ContextTypes.DEFAULT_TYPE, *, include_cancel: bool = False) -> InlineKeyboardMarkup:
+    voice = context.user_data.get("voice", DEFAULT_VOICE)
+    is_female = voice == "uz-UZ-MadinaNeural"
+    translate = bool(context.user_data.get("translate", TRANSLATE_BY_DEFAULT))
+    rows = [
+        [
+            InlineKeyboardButton(("✅ " if not is_female else "") + "👨 Erkak ovozi", callback_data="voice:male"),
+            InlineKeyboardButton(("✅ " if is_female else "") + "👩 Ayol ovozi", callback_data="voice:female"),
+        ],
+        [
+            InlineKeyboardButton(
+                "🌐 Google tarjima: YOQILGAN" if translate else "🌐 Google tarjima: O‘CHIQ",
+                callback_data="translate:toggle",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                "⏭ Tarjimani o‘tkazib yuborish" if translate else "🔁 Google tarjimani yoqish",
+                callback_data="translate:skip" if translate else "translate:on",
+            ),
+        ],
+    ]
+    if include_cancel:
+        rows.append([InlineKeyboardButton("❌ Kutayotgan topshiriqni bekor qilish", callback_data="job:cancel")])
+    return InlineKeyboardMarkup(rows)
+
+
+async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if not query:
+        return
+    if not _authorized(update):
+        await query.answer("Bu botdan foydalanishga ruxsat yo‘q.", show_alert=True)
+        return
+
+    action = query.data or ""
+    if action == "voice:male":
+        context.user_data["voice"] = "uz-UZ-SardorNeural"
+        notice = "Erkak ovozi tanlandi: Sardor."
+    elif action == "voice:female":
+        context.user_data["voice"] = "uz-UZ-MadinaNeural"
+        notice = "Ayol ovozi tanlandi: Madina."
+    elif action == "translate:toggle":
+        context.user_data["translate"] = not bool(context.user_data.get("translate", TRANSLATE_BY_DEFAULT))
+        notice = "Google Translate sozlamasi o‘zgartirildi."
+    elif action == "translate:skip":
+        context.user_data["translate"] = False
+        notice = "Tarjima o‘chirildi. SRT asl holicha ovozlashtiriladi."
+    elif action == "translate:on":
+        context.user_data["translate"] = True
+        notice = "Google Translate orqali tarjima yoqildi."
+    elif action == "job:cancel":
+        state = context.user_data.pop("pending_job", None)
+        if state:
+            shutil.rmtree(state.get("job_dir", ""), ignore_errors=True)
+            notice = "Kutayotgan topshiriq bekor qilindi."
+        else:
+            notice = "Bekor qilinadigan kutayotgan topshiriq yo‘q."
+        await query.answer(notice)
+        if query.message:
+            await query.edit_message_text(notice)
+        return
+    else:
+        await query.answer()
+        return
+
+    await query.answer(notice)
+    if query.message:
+        try:
+            await query.edit_message_reply_markup(
+                reply_markup=_settings_keyboard(
+                    context,
+                    include_cancel=bool(context.user_data.get("pending_job")),
+                )
+            )
+        except TelegramError:
+            log.debug("Inline keyboard refresh failed", exc_info=True)
 
 async def _maybe_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     state = context.user_data.get("pending_job")
@@ -211,24 +284,26 @@ async def _maybe_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
         return
-    text = update.effective_message.text or ""
+    message = update.effective_message
+    text = message.text or ""
     url = _safe_youtube_url(text)
     if not url:
-        await update.effective_message.reply_text(
-            "YouTube havolasi yuboring (youtube.com yoki youtu.be). So‘ng mos .srt faylni yuboring."
-        )
+        await message.reply_text("Avval YouTube havolasini yuboring (youtube.com yoki youtu.be).")
         return
 
-    state = context.user_data.get("pending_job")
-    if not state:
-        state = _new_state(update.effective_user.id)
-        context.user_data["pending_job"] = state
+    old_state = context.user_data.pop("pending_job", None)
+    if old_state:
+        shutil.rmtree(old_state.get("job_dir", ""), ignore_errors=True)
+    state = _new_state(update.effective_user.id)
     state["url"] = url
-    await update.effective_message.reply_text(
-        "YouTube havolasi saqlandi. Endi shu video uchun .srt subtitr faylini yuboring."
+    context.user_data["pending_job"] = state
+    await message.reply_text(
+        "✅ 1/2 — YouTube havolasi saqlandi.\n"
+        "Endi 2/2: aynan shu videoga tegishli .srt faylini yuboring.\n"
+        "Ovoz va tarjima sozlamalarini pastdagi tugmalardan o‘zgartirishingiz mumkin.",
+        reply_markup=_settings_keyboard(context, include_cancel=True),
     )
     await _maybe_queue(update, context)
-
 
 async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
@@ -246,9 +321,12 @@ async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     state = context.user_data.get("pending_job")
-    if not state:
-        state = _new_state(update.effective_user.id)
-        context.user_data["pending_job"] = state
+    if not state or not state.get("url"):
+        await message.reply_text(
+            "Tartib bo‘yicha avval YouTube linkini yuboring. Shundan keyingina .srt faylini qabul qilaman."
+        )
+        return
+
     staged_dir = Path(state["job_dir"])
     staged_dir.mkdir(parents=True, exist_ok=True)
     target = Path(state["srt_path"])
@@ -264,19 +342,18 @@ async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 shutil.copy2(downloaded_path, target)
         if not target.is_file() or target.stat().st_size == 0:
             raise RuntimeError("SRT fayli saqlanmadi")
-    except Exception as exc:
+    except Exception:
         log.exception("Could not save incoming SRT file")
-        await message.reply_text(
-            "SRT faylini saqlab bo‘lmadi. Faylni yana bir marta yuboring."
-        )
+        await message.reply_text("SRT faylini saqlab bo‘lmadi. Faylni yana bir marta yuboring.")
         return
 
     await message.reply_text(
-        "SRT fayli olindi. " +
-        ("Endi YouTube havolasini yuboring." if not state.get("url") else "Ikkala fayl ham tayyorlanmoqda.")
+        "✅ 2/2 — SRT fayli qabul qilindi. "
+        + ("Google Translate yoqilgan. " if context.user_data.get("translate", TRANSLATE_BY_DEFAULT) else "Tarjima o‘tkazib yuboriladi. ")
+        + ("Ovoz: Madina (ayol)." if context.user_data.get("voice", DEFAULT_VOICE) == "uz-UZ-MadinaNeural" else "Ovoz: Sardor (erkak)."),
+        reply_markup=_settings_keyboard(context, include_cancel=True),
     )
     await _maybe_queue(update, context)
-
 
 async def _run_job(
     application: Application,
@@ -418,6 +495,10 @@ def main() -> None:
     application.add_handler(CommandHandler("voice", voice_command))
     application.add_handler(CommandHandler("translate", translate_command))
     application.add_handler(CommandHandler("cancel", cancel_command))
+    application.add_handler(CallbackQueryHandler(
+        settings_callback,
+        pattern=r"^(voice:(male|female)|translate:(toggle|skip|on)|job:cancel)$",
+    ))
     application.add_handler(MessageHandler(filters.Document.ALL, on_document))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     log.info("Bot starting. Allowed Telegram IDs: %s", sorted(ALLOWED_USER_IDS))
