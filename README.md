@@ -34,6 +34,8 @@ Repo → Settings → Secrets and variables → Actions sahifasida quyidagi `Sec
 
 Secrets sahifasi: https://github.com/husananorqulov7431-coder/Tts/settings/secrets/actions
 
+`ORACLE_KNOWN_HOSTS` secret’iga oddiygina tekshirilmagan boshqa server kalitini ko‘chirib qo‘ymang: u deploy vaqtida SSH serverining kimligini tekshirish uchun ishlatiladi.
+
 ## Oracle VM’ni bir marta tayyorlash
 
 Ubuntu VM yarating, SSH orqali kiring va Docker/Compose o‘rnating:
@@ -49,7 +51,13 @@ sudo chown "$USER":"$USER" /opt/tts-bot
 
 Guruh o‘zgarishi kuchga kirishi uchun SSH’dan chiqib qayta kiring. Oracle Cloud Networking/Security List’da SSH porti 22 ochiq bo‘lsin. Bot API serveri Docker tarmog‘ida ishlaydi, 8081 portini internetga ochish shart emas.
 
-Agar shu bot tokeni avval Telegram’ning odatiy cloud Bot API’sida polling uchun ishlatilgan bo‘lsa, lokal API serverga o‘tishdan oldin token uchun `logOut` bir marta bajarilishi kerak. Tokenni URL yoki terminal tarixi ichida oshkor qilmang; ishonchli shell’da `curl -sS "https://api.telegram.org/bot<TOKEN>/logOut"` buyrug‘ini token qiymatini o‘zingiz almashtirib bajaring.
+Agar shu bot tokeni avval Telegram’ning odatiy cloud Bot API’sida polling uchun ishlatilgan bo‘lsa, lokal API serverga o‘tishdan oldin token uchun `logOut` bir marta bajarilishi kerak. Tokenni shell history’ga yozmaslik uchun terminalda tokenni yashirin kiritib, quyidagini bajaring:
+
+```bash
+read -s -p "Bot token: " BOT_TOKEN; echo
+curl -sS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/logOut"
+unset BOT_TOKEN
+```
 
 ## Deploy
 
