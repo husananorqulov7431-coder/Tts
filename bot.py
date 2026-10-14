@@ -380,7 +380,7 @@ async def _run_job(
 
 def _wait_for_local_api() -> None:
     # The local Bot API container may need a few seconds to initialize.
-    endpoint = f"{API_BASE_URL.rstrip('/')}/{TOKEN}/getMe"
+    endpoint = f"{API_BASE_URL.rstrip('/')}{TOKEN}/getMe"
     for _ in range(60):
         try:
             with urlopen(endpoint, timeout=3) as response:
