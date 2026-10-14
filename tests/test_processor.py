@@ -83,7 +83,7 @@ class ProcessorHelpersTest(unittest.TestCase):
                     with self.assertRaisesRegex(ProcessingError, "bot-tekshiruv"):
                         _download_video("https://youtu.be/example", Path(directory))
 
-        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(calls), 7)
         self.assertEqual(
             calls[1]["extractor_args"]["youtube"]["player_client"], ["tv"]
         )
@@ -92,6 +92,15 @@ class ProcessorHelpersTest(unittest.TestCase):
         )
         self.assertEqual(
             calls[3]["extractor_args"]["youtube"]["player_client"], ["web_safari"]
+        )
+        self.assertEqual(
+            calls[4]["extractor_args"]["youtube"]["player_client"], ["tv_simply"]
+        )
+        self.assertEqual(
+            calls[5]["extractor_args"]["youtube"]["player_client"], ["web_embedded"]
+        )
+        self.assertEqual(
+            calls[6]["extractor_args"]["youtube"]["player_client"], ["tv", "web_safari"]
         )
 
 
