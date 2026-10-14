@@ -41,7 +41,6 @@ API_BASE_URL = os.getenv("TELEGRAM_API_BASE_URL", "http://telegram-bot-api:8081/
 API_FILE_URL = os.getenv("TELEGRAM_API_FILE_URL", "http://telegram-bot-api:8081/file/bot")
 DEFAULT_VOICE = os.getenv("DEFAULT_VOICE", "uz-UZ-SardorNeural")
 MAX_SRT_MB = int(os.getenv("MAX_SRT_MB", "15"))
-MAX_JOB_SECONDS = int(os.getenv("MAX_JOB_SECONDS", "600"))
 BOT_RUNTIME_SECONDS = int(os.getenv("BOT_RUNTIME_SECONDS", "0"))
 STOP_AFTER_JOB = os.getenv("STOP_AFTER_JOB", "false").lower() in {"1", "true", "yes", "on"}
 INBOX_ROOT = Path(os.getenv("INBOX_DIR", "/work/inbox"))
